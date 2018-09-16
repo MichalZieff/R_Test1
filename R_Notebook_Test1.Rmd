@@ -1,0 +1,43 @@
+MODERN STATISTICAL METHODS WITH R ~ TEST 1
+
+Michal Zieff
+
+An initial look at the codebook and papers suggests that we will be dealing with a large number of variables. We start by importing the two .sav datasets into R. First, though, we should load all packages that we will need for this analysis. 
+
+```{r}
+library(pacman)
+p_load(tidyverse, haven, magrittr, read_xl, psych, janitor)
+```
+
+We use a function from package "haven" to load the two spss files into R. 
+
+```{r}
+del.dat <- read_spss("data/Cambridge_delinquency.sav")
+con.dat <- read_spss("data/conviction_data.sav")
+```
+
+Upon inspection of the con.dat dataset, it looks like we need to change it into wide format. 
+
+```{r}
+con_wide.dat <- tidyr::spread(con.dat, key = agecat, value = convicted) #want columns to represent the different age categories, and the rows to list the number of convictions at each age range. 
+```
+
+N is now 411 in both datasets, which is good. There is no "matching" criterion on which to join the two datasets (i.e., the del.dat dataset does not specify participant ID number). Hence, I will simply join the datasets on the assumption that the rows in both datasets represent the same person.
+
+It appears that to use the merge or join functions, there has to be at least one matching variable. Hence, I am going to create a participant ID variable and add it to the del.dat dataset. 
+
+```{r}
+
+icpsr_seq_id_number <- 1:411 #create a vector containing numbers 1 - 411
+
+#Now, join it as a column to del.dat
+
+del_id.dat <- cbind(del.dat, icpsr_seq_id_number)
+
+#Join the two datasets
+
+joined.dat <- left_join(del_id.dat, con_wide.dat, by = "icpsr_seq_id_number")
+
+```
+
+The del.dat dataset still presents some problems. First, it contains 870 variables. We need to decide on a strategy to weed through this dataset, with the aim of creating a clean and manageable data frame on which to build our model. 
