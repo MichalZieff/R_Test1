@@ -94,16 +94,50 @@ str(convict.dat$convicted_as_juvenile) #check
 
 ```
 
-
 QUESTION 2: Explore the data
 
+First, we should do a quick check for impossible/unreasonable values in the dataset. We have a clear idea of how scores on the variables should range, and any value that does not make sense in this context should be removed. We can also kill two birds with one stone if we use the describeBy function in package psych, which will allow us a rudimentary overview into any possible between-group differences. 
 
 
+```{r}
+describe(convict.dat)
+```
 
+As a start, it would be useful to see how many boys in our sample ended up committing crimes at all, and if so, then how many. Let's look at the spread of our predictor variable. 
 
+```{r}
 
+convict.dat$v28 <- as.numeric(convict.dat$v28) #changing variable type to numeric. 
 
+qplot(convict.dat$v28, geom = "histogram", binwidth = 0.5, main = "Histogram showing spread of convictions", xlab = "Number of juvenile convictions") #make a quick plot using ggplot2 to check spread of convictions in the sample
+```
 
+We have a very skewed distribution, which makes sense to us given what the variable is looking us. Most of the boys were never convicted of any crime. Just under 50 boys committed one crime, around 20 were convicted of two or three crimes, and only about 15 or so were convicted of four or more crimes. 
 
+Due to our large number of predictors, it does not seem prudent to inspect the spread of all of them. We can use the pairs.panel function from package psych for an overview on the relationships between the predictors and the outcome variable. 
 
+```{r}
+
+convict.dat %>% 
+  select(v28, v67, v113, v117, v54, v142, v123, v134, v178, v179) %>% 
+  #Dividing the variables up into 2 chunks to make it easier to read.
+  #Selecting the first batch here.
+  pairs.panels()
+```
+At a quick glance, it does not look like there is much of a relationship between number of juvenile convictions and a) being a fretful baby, b) birth abnormalities and c) being withdrawn vs outgoing. However, there are small to moderate positive relationships between juvenile convictions the other predictors in this batch, in particular combined conduct disorder, social handicap and physical neglect. Now to look at the second batch. 
+
+```{r}
+convict.dat %>% 
+  select(v28, v91, v105, v125, v155, v297, v119, v158, v300, v301) %>% 
+  #Dividing the variables up into 2 chunks to make it easier to read.
+  pairs.panels()
+```
+A quick glance at the chart shows that relatively stronger relationships exist between number of convictions and whether the child was difficult to discipline in school, the child's score on the progressive matrices and verbal comprehension (so, IQ), and familial criminal record variables. Of note is the moderate correlation between the two IQ variables, so perhaps we need only include one in the model. There also seems to be a relationship between parental attitudes and conduct disorder,which is interesting. Perhaps we ought to investigate this further. Aside from these possible instances of multicollinearity, the predictors appear to be relatively unrelated, so it is unlikely that we will see "overlapping" explained variance in the model. 
+
+```{r}
+convict.dat$v178 <- as.factor(convict.dat$v178)
+convict.dat$v54 <- as.factor(as.numeric((convict.dat$v54)))
+
+ggplot(data = convict.dat, mapping = aes(x = v178, y = v28)) + geom_point(mapping = aes(color = v54)) + geom_smooth(mapping = aes(color = v54))
+```
 
