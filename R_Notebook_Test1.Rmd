@@ -2,11 +2,13 @@ MODERN STATISTICAL METHODS WITH R ~ TEST 1
 
 Michal Zieff
 
+QUESTION 1: Create a workable dataset 
+
 An initial look at the codebook and papers suggests that we will be dealing with a large number of variables. We start by importing the two .sav datasets into R. First, though, we should load all packages that we will need for this analysis. 
 
 ```{r}
 library(pacman)
-p_load(tidyverse, haven, magrittr, read_xl, psych, janitor)
+p_load(tidyverse, haven, magrittr, psych, janitor, labelled)
 ```
 
 We use a function from package "haven" to load the two spss files into R. 
@@ -24,7 +26,7 @@ con_wide.dat <- tidyr::spread(con.dat, key = agecat, value = convicted) #want co
 
 N is now 411 in both datasets, which is good. There is no "matching" criterion on which to join the two datasets (i.e., the del.dat dataset does not specify participant ID number). Hence, I will simply join the datasets on the assumption that the rows in both datasets represent the same person.
 
-It appears that to use the merge or join functions, there has to be at least one matching variable. Hence, I am going to create a participant ID variable and add it to the del.dat dataset. 
+It appears that to use the merge or join functions, there has to be at least one matching variable. Hence, I am going to create a participant ID variable (identical to that in the con_wide.dat dataset), add it to the del.dat dataset, and then match del.dat and con_wide.dat on that variable.
 
 ```{r}
 
@@ -41,3 +43,67 @@ joined.dat <- left_join(del_id.dat, con_wide.dat, by = "icpsr_seq_id_number")
 ```
 
 The del.dat dataset still presents some problems. First, it contains 870 variables. We need to decide on a strategy to weed through this dataset, with the aim of creating a clean and manageable data frame on which to build our model. 
+
+As an outcome variable, I think it makes sense to predict juvenile conviction, rather than adult conviction, as this is central to our research question. In the dataset, juvenile delinquency is coded as both a categorical and continuous variable. I will include both use the continuous variable "# of juvenile convictions" and the categorical variable "convicted as a minor - yes or no?". There has to be a way to limit ourselves as to the variables we are going to look at, or we'll be here forever. Just by nature of the question I've chosen to answer ("How do early childhood factors influence childhood delinquency?") I will not include variables that were recorded past the age of 12.
+
+Within those 310 variables, I also chose no more than 30 to begin with, to make things easier. I present them below categorised by theme: 
+
+BIRTH RELATED/TEMPERAMENT/PERSONALITY:
+
+Var 67 - fretful baby. 1 = not fretful, 2 = fretful.
+Var 113 - presence of abnormality from birthing records (bw, confinement, preg). 0 = not known, 1 = no abnormality, 2 = abnormality present. 
+Var 117 - outgoing or withdrawn (evaluation of child's temperament). 0 = unknown, 1 = at ease/outgoing, 2 = normal, 3 = rather shy/definitely withdrawn. 
+Var 54 - combined conduct disorder. Conduct disorder of boy (as rated by interviewer) and teacher's rating of bad behaviour. Coding 1 = good (no conduct disorder) to 5 = bad/severe conduct disorder. Not sure whether this is the right category for this variable, because it encompasses a bit of everything, but we will leave it here for now. 
+
+
+HOME/FAMILY RELATED
+
+Var 142 - social handicap. Composite variable of seven individual variables (reliance of social agencies, housing conditions - interior and general, a marker of socioeconomic status, income of family, large family, and physical neglect of boy). If none = 1, if 1-3 of these things, response coded as 2, if 4-7 of these things, the response coded as 3. 
+Var 123 - physical neglect of boy. Want to include this as its own variable. 0 = unknown, 1 = neglect absent, 2 - neglect present. 
+Var 134 broken home (separation of biological parents) before age 10. 1 = no borken home, 2 = broken due to death only, 3 = broken home
+Var 178 - attitude of father combined - composite variable (attitude, discipline, and discipline quality). 0 = unknown, 1 = good, 2 = good average, 3 = poor average, 4 = poor. 
+Var 179 - attitude of mother combined - composite variable (same as for paternal above).
+Var 91 - parents interested in child's education. 0 = unknown, 1 = very interested, 2 = average, 3 = not interested. 
+
+SCHOOL/SOCIAL-RELATED:
+
+Var 105 - number of friends of boy. 0 = not known, 1 = makes many friends, 2 = has average number, 3 = has few or no friends 
+Var 125 - peer rating popularity. 0 = unknown, 1 = popular, 2 = average popular, 3 = average unpopular, 4 = unpopular. 
+Var 155 - teacher rating poor attendance. 0 = unknown, 1 = satisfactory attendance, 2 = absenteeism mentioned. 
+Var 297 - teacher rating difficult to discipline. 0 = unknown, 1 = not difficult, 2 = difficult. 
+
+IQ
+
+Var 119 progressive matrices (a measure of IQ). 1 = highest scoring bracket, and 4 = lowest scoring bracket.
+Var 158 - verbal comprehension quotient (another cognitive measure). 1 = highest bracket, and 4 = lowst scoring bracket. 
+
+
+OTHER RISK FACTORS
+
+Var 300 - criminal record of parents. 1 = no parent convicted, 2 = convicted as juvenile only, 3 = once only as adult, 4 = twice as adult, 5 = three times as an adult, 6 = four or more times as an adult. 
+Var 301 - delinquent older sibling. 1 = no older sibling convicted, 2 = older sibling convicted. 
+
+Need to make a new dataset including the above predictors, plus two possible outcome variables:
+
+```{r}
+convict.dat <- select(joined.dat, icpsr_seq_id_number, convicted_as_juvenile, v28, v67, v113, v117, v54, v142, v123, v134, v178, v179, v91, v105, v125, v155, v297, v119, v158, v300, v301) #select variables from the large dataset to create a new dataset
+
+convict.dat$convicted_as_juvenile <- as.factor(convict.dat$convicted_as_juvenile) #changing the categorical predictor to a factor (originally numeric). 
+
+str(convict.dat$convicted_as_juvenile) #check
+
+```
+
+
+QUESTION 2: Explore the data
+
+
+
+
+
+
+
+
+
+
+
