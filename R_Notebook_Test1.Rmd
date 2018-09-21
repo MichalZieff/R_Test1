@@ -1,3 +1,8 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 MODERN STATISTICAL METHODS WITH R ~ TEST 1
 
 Michal Zieff
@@ -124,7 +129,7 @@ convict.dat %>%
   #Selecting the first batch here.
   pairs.panels()
 ```
-At a quick glance, it does not look like there is much of a relationship between number of juvenile convictions and a) being a fretful baby, b) birth abnormalities and c) being withdrawn vs outgoing. However, there are small to moderate positive relationships between juvenile convictions the other predictors in this batch, in particular combined conduct disorder, social handicap and physical neglect. Now to look at the second batch. 
+At a quick glance, it does not look like there is much of a relationship between number of juvenile convictions and a) being a fretful baby, b) birth abnormalities and c) being withdrawn vs outgoing. However, there are small to moderate positive relationships between juvenile convictions the other predictors in this batch, in particular combined conduct disorder, social handicap and physical neglect (r's ranging between . There is also a moderate correlation between physical neglect and social handicap (which is not surprising, as physical neglect is included in the social handicap composite variable), so we should consider dropping one of them in the model. In addition, there also appears to be a relationship (albeit small-moderate) between social handicap/neglect and conduct disorder, and between mother's attitude and conduct disorder. This could be worth exploring in more detail. It may also be worth including the attitude of only one of the parents, e.g., only mother's attitude, as we expect some overlap there. Now to look at the second batch. 
 
 ```{r}
 convict.dat %>% 
@@ -132,12 +137,104 @@ convict.dat %>%
   #Dividing the variables up into 2 chunks to make it easier to read.
   pairs.panels()
 ```
-A quick glance at the chart shows that relatively stronger relationships exist between number of convictions and whether the child was difficult to discipline in school, the child's score on the progressive matrices and verbal comprehension (so, IQ), and familial criminal record variables. Of note is the moderate correlation between the two IQ variables, so perhaps we need only include one in the model. There also seems to be a relationship between parental attitudes and conduct disorder,which is interesting. Perhaps we ought to investigate this further. Aside from these possible instances of multicollinearity, the predictors appear to be relatively unrelated, so it is unlikely that we will see "overlapping" explained variance in the model. 
+A quick glance at the chart shows that relatively stronger relationships exist between number of convictions and whether the child was difficult to discipline in school, the child's score on the progressive matrices and verbal comprehension (so, IQ), and familial criminal record variables (i.e., older sibling and/or parent). Of note is the moderate correlation between the two IQ variables, so perhaps we need only include one in the model. Aside from the above-mentioned possible instances of multicollinearity, the predictors appear to be relatively unrelated, so it is unlikely that we will see much "overlapping" explained variance in the model. The two social variables (number of friends and peer-rated popularity) do not appear to account for much variance, so these may be weak predictors. 
+
+I want to further explore the relationship between conduct disorder and parental attitude. 
 
 ```{r}
-convict.dat$v178 <- as.factor(convict.dat$v178)
-convict.dat$v54 <- as.factor(as.numeric((convict.dat$v54)))
+convict.dat$v179 <- as.numeric(convict.dat$v179) #coding maternal attitude as a numeric variable for the graph. 
+convict.dat$v54 <- as.factor(convict.dat$v54) #changing this variable to a factor so that R will be able to use it as a grouping variable in the graph
 
-ggplot(data = convict.dat, mapping = aes(x = v178, y = v28)) + geom_point(mapping = aes(color = v54)) + geom_smooth(mapping = aes(color = v54))
+ggplot(data = convict.dat, mapping = aes(x = v179, y = v28)) + geom_point(mapping = aes(color = v54)) + geom_smooth(mapping = aes(color = v54)) #Using maternal attitude as the x variable, but the graph looks the same for paternal attitude. 
+
 ```
+This graph suggests that at the "highest" (worst) level of conduct disorder (level 5), as maternal attitude go from "good" to "poor average" (where "good" = loving normal parenting style and normal disciplinary styles,and "poor average" = some combination of lax/strict/passive/spoilt/disinterested/erratic parenting and discipline styles) number of juvenile convictions actually decreases, until parenting becomes "poor" (harsh, erratic, cruel, neglecting), at which point number of convictions markedly increases. To make things even more peculiar, when looking at the second worst level of conduct disorder, the highest number of convictions are present when parenting levels are "good-average", and are lowest when parental attitude is "poor average". This pattern is unexpected, but should be interpreted with caution; there is a large margin of error around the interaction lines. Nonetheless, it may be worth considering an interaction effect here. 
+
+Now, I want to look at a possible interaction between social handicap and conduct disorder. 
+
+```{r}
+
+convict.dat$v54 <- as.numeric(convict.dat$v54) #coding maternal attitude as a numeric variable for the graph. 
+convict.dat$v142 <- as.factor(convict.dat$v142) #coding maternal attitude as a numeric variable for the graph. 
+
+ggplot(data = convict.dat, mapping = aes(x = v54, y = v28)) + geom_point(mapping = aes(color = v142)) + geom_smooth(mapping = aes(color = v142)) #Using maternal attitude as the x variable, but the graph looks the same for paternal attitude. 
+
+
+```
+There does not appear to be any interesting interaction here. Boys with a greater social handicap are convicted of more crimes regardless of level of conduct disorder; boys with "worse" conduct disorder committ more crimes regardless. What is of note, however, is that the "jump" in the number of convictions when conduct disorder goes from "bad" to "severe" is much greater for boys with a big social handicap. 
+
+QUESTION 3: Build a model/s
+
+Three decisions need to be made prior to building the models. First, do we use the continuous or categorical outcome variable? It might be worth producing both to see how they differ - I think they provide different kinds of information; both are valuable. Second, how will we add predictors to the model? Given that we have "categorised" the predictors into themes, it may make sense to attempt a hierarchical method. 
+
+Based on our findings in Q2 above, we can "rule out" a number of predictors:
+It did not seem like the birth/infant variables (67, fretful baby, and 113, abnormalities at birth) had much of a relationship with convictions, so let us exclude those for now. In addition the "personality" variable (outgoing vs withdrawn) did not appear to account for a lot of variance in number of convictions. We are only keeping one IQ variable (119, matrices) and are excluding verbal comprehension (158). We could also argue to not include the two social predictors, and to only include the teacher rating variables. 
+
+Another important decision to make is how we are going to cross-validate the model. It is worth beginning with a test-train method, especially as we have such a big sample. We may want to look at other methods later in the analysis. 
+
+```{r}
+set.seed(1)
+traindata <- dplyr::sample_frac(convict.dat, 0.70)
+testdata <- dplyr::setdiff(convict.dat, traindata)
+```
+
+Before buidling the models, we first need to check that all variables are in the correct format (i.e., type). There are lots of variables that are scored as ordered factors (likert-type scale responses), but for present purposes, it makes sense to code them as numeric variables. There are some limitations to this; R will assume that the difference between a 2 and a 3, for example, is 1, and that this difference is the same as that between the 3 and 4. Most of the variables are currently categorised as "labelled" - I'm not sure exactly what that means or what the implications of that is, so I think it best to change them all manually. 
+
+```{r}
+traindata$v54 <- as.numeric(traindata$v54) #changing the conduct disorder variable back to numeric variable
+str(traindata$v123)
+traindata$v123 <- as.factor(traindata$v123) #changing the neglect variable into a two level factor. 
+str(traindata$v134)
+traindata$v134 <- as.factor(traindata$v134) #broken home variable
+str(traindata$v123)
+traindata$v123 <- as.factor(traindata$v123) #physical neglect
+traindata$v91 <- as.numeric(traindata$v91) #interest in child's education
+
+```
+
+Now to build a model with the continuous variable.
+
+```{r}
+cont_model1 <- lm(v28 ~ v54, data = traindata)
+summary(cont_model1)
+```
+Presence of conduct disorder accounts for just under 15% of variance in number of convictions. Let's add home/family related variables. 
+
+```{r}
+cont_model2 <- lm(v28 ~ v54 + v123 + v142 + v134 + v179 + v91, data = traindata)
+summary(cont_model2)
+```
+The addition of the five home-related variables add 5% of explained variance. Only two of the added variables are significant: social handicap, and having a broken home. We can remove the others for now, and then add the rest.  
+
+```{r}
+cont_model3 <- lm(v28 ~ v54 + v142 + v134 + v155 + v297 + v119 +v300 + v301, data = traindata)
+summary(cont_model3)
+```
+Now that we have added the school variables, some of the previously significant variables are no longer significant. Now, only conduct disorder and teacher's rating of difficulty in disciplining are significant. So, our final model is:
+
+```{r}
+cont_final_model <- lm(v28 ~ v54 + v297, data = traindata)
+summary(cont_final_model)
+```
+This model does not explain a fortune of variance (only 17%, slightly more than conduct disorder by itself), but the model can significantly predict the number of crimes committed by a boy in the sample. It is worth noting that the combined conduct disorder here includes a teacher's rating of bad behaviour, in addition to the researcher's rating. Hence, both predictors in our final model involve some kind of teacher rating, suggesting that a boy's teacher may be a valuable source of information when determining high-risk children for an intervention, for example. 
+
+Let's plot the model:
+
+```{r}
+ggplot(cont_final_model, aes(x = v54 + v297, y = v28)) + geom_point() + geom_smooth(method = "lm")
+```
+
+It is difficult to 
+
+
+LOGISTIC MODEL
+
+```{r}
+
+log_model1 <- glm(convicted_as_juvenile ~ v54 + v297, family = "binomial", data = traindata)
+summary(log_model1)
+
+```
+
+
 
