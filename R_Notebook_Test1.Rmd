@@ -7,13 +7,15 @@ MODERN STATISTICAL METHODS WITH R ~ TEST 1
 
 Michal Zieff
 
+In this test, attempt to answer the following research question: what are the strongest predictors of juvenile conviction? My aim is build a model that predicts whether or not a child is convicted.  
+
 QUESTION 1: Create a workable dataset 
 
 An initial look at the codebook and papers suggests that we will be dealing with a large number of variables. We start by importing the two .sav datasets into R. First, though, we should load all packages that we will need for this analysis. 
 
 ```{r}
 library(pacman)
-p_load(tidyverse, haven, magrittr, psych, janitor, labelled)
+p_load(tidyverse, haven, magrittr, psych, janitor, labelled, car)
 ```
 
 We use a function from package "haven" to load the two spss files into R. 
@@ -29,9 +31,7 @@ Upon inspection of the con.dat dataset, it looks like we need to change it into 
 con_wide.dat <- tidyr::spread(con.dat, key = agecat, value = convicted) #want columns to represent the different age categories, and the rows to list the number of convictions at each age range. 
 ```
 
-N is now 411 in both datasets, which is good. There is no "matching" criterion on which to join the two datasets (i.e., the del.dat dataset does not specify participant ID number). Hence, I will simply join the datasets on the assumption that the rows in both datasets represent the same person.
-
-It appears that to use the merge or join functions, there has to be at least one matching variable. Hence, I am going to create a participant ID variable (identical to that in the con_wide.dat dataset), add it to the del.dat dataset, and then match del.dat and con_wide.dat on that variable.
+N is now 411 in both datasets, which is good. There is no existing "matching" criterion on which to join the two datasets (e.g., the del.dat dataset does not specify participant ID number). It appears that to use the merge or join functions, there has to be at least one matching variable. Hence, I will simply join the datasets on the assumption that the row numbers in both datasets represent the same person. To do this, I am going to create a participant ID variable (identical to that in the con_wide.dat dataset), add it to the del.dat dataset, and then match del.dat and con_wide.dat on that variable. The column with the ID variable in the con_wide.dat dataset is simply a vector of numbers 1:411. So, if I create a similar vector and add it as a variable to del.dat, we now have a matching variable. 
 
 ```{r}
 
@@ -47,11 +47,11 @@ joined.dat <- left_join(del_id.dat, con_wide.dat, by = "icpsr_seq_id_number")
 
 ```
 
-The del.dat dataset still presents some problems. First, it contains 870 variables. We need to decide on a strategy to weed through this dataset, with the aim of creating a clean and manageable data frame on which to build our model. 
+The del.dat dataset still presents some problems. First, it contains 870 variables. We need to decide on a strategy to weed through this dataset, with the aim of creating a clean and manageable data frame with which to build our model. 
 
-As an outcome variable, I think it makes sense to predict juvenile conviction, rather than adult conviction, as this is central to our research question. In the dataset, juvenile delinquency is coded as both a categorical and continuous variable. I will include both use the continuous variable "# of juvenile convictions" and the categorical variable "convicted as a minor - yes or no?". There has to be a way to limit ourselves as to the variables we are going to look at, or we'll be here forever. Just by nature of the question I've chosen to answer ("How do early childhood factors influence childhood delinquency?") I will not include variables that were recorded past the age of 12.
+As an outcome variable, I think it makes sense to predict juvenile conviction, rather than adult conviction, as this is central to our research question and aim. In the dataset, juvenile delinquency is coded as both a categorical and continuous variable. I will include both the continuous variable "# of juvenile convictions" and the categorical variable "convicted as a minor - yes or no?". There has to be a way to limit ourselves as to the variables we are going to look at, or we'll be here forever. Because I would like to determine the childhood factors that predict juvenile conviction, I will not include variables that were recorded past the age of 12.
 
-Within those 310 variables, I also chose no more than 30 to begin with, to make things easier. I present them below categorised by theme: 
+Within those 310 variables, I will begin with those that make the most sense to include (based on studies that have come from the data, and other research that looked at outcomes of these predictors). I present them below categorised by theme, with an indication of how the scores/responses are coded: 
 
 BIRTH RELATED/TEMPERAMENT/PERSONALITY:
 
@@ -88,7 +88,7 @@ OTHER RISK FACTORS
 Var 300 - criminal record of parents. 1 = no parent convicted, 2 = convicted as juvenile only, 3 = once only as adult, 4 = twice as adult, 5 = three times as an adult, 6 = four or more times as an adult. 
 Var 301 - delinquent older sibling. 1 = no older sibling convicted, 2 = older sibling convicted. 
 
-Need to make a new dataset including the above predictors, plus two possible outcome variables:
+Need to make a new dataset including the above predictors, plus our chosen outcome variable:
 
 ```{r}
 convict.dat <- select(joined.dat, icpsr_seq_id_number, convicted_as_juvenile, v28, v67, v113, v117, v54, v142, v123, v134, v178, v179, v91, v105, v125, v155, v297, v119, v158, v300, v301) #select variables from the large dataset to create a new dataset
@@ -117,7 +117,7 @@ convict.dat$v28 <- as.numeric(convict.dat$v28) #changing variable type to numeri
 qplot(convict.dat$v28, geom = "histogram", binwidth = 0.5, main = "Histogram showing spread of convictions", xlab = "Number of juvenile convictions") #make a quick plot using ggplot2 to check spread of convictions in the sample
 ```
 
-We have a very skewed distribution, which makes sense to us given what the variable is looking us. Most of the boys were never convicted of any crime. Just under 50 boys committed one crime, around 20 were convicted of two or three crimes, and only about 15 or so were convicted of four or more crimes. 
+We have a very skewed distribution, which makes sense to us given what the variable is looking us. Most of the boys were never convicted of any crime. Just under 50 boys committed one crime, around 20 were convicted of two or three crimes, and only about 15 or so were convicted of four or more crimes. An option may be to perform a Box-Cox transformation. This would, however, make for a trickier (and less meaningful) interpretation, that is, we would be predicting number of convictions to the power of x, rather than number of convictions. We can leave it for now. 
 
 Due to our large number of predictors, it does not seem prudent to inspect the spread of all of them. We can use the pairs.panel function from package psych for an overview on the relationships between the predictors and the outcome variable. 
 
@@ -129,7 +129,7 @@ convict.dat %>%
   #Selecting the first batch here.
   pairs.panels()
 ```
-At a quick glance, it does not look like there is much of a relationship between number of juvenile convictions and a) being a fretful baby, b) birth abnormalities and c) being withdrawn vs outgoing. However, there are small to moderate positive relationships between juvenile convictions the other predictors in this batch, in particular combined conduct disorder, social handicap and physical neglect (r's ranging between . There is also a moderate correlation between physical neglect and social handicap (which is not surprising, as physical neglect is included in the social handicap composite variable), so we should consider dropping one of them in the model. In addition, there also appears to be a relationship (albeit small-moderate) between social handicap/neglect and conduct disorder, and between mother's attitude and conduct disorder. This could be worth exploring in more detail. It may also be worth including the attitude of only one of the parents, e.g., only mother's attitude, as we expect some overlap there. Now to look at the second batch. 
+At a quick glance, it does not look like there is much of a relationship between number of juvenile convictions and a) being a fretful baby, b) birth abnormalities and c) being withdrawn vs outgoing. However, there are small to moderate positive relationships between juvenile convictions the other predictors in this batch, in particular combined conduct disorder, social handicap and physical neglect (r's ranging between .27 - .33) . There is also a moderate correlation between physical neglect and social handicap (r = .58, which is not surprising, as physical neglect is included in the social handicap composite variable), so we should consider dropping one of them in the model. In addition, there also appears to be a relationship (albeit small-moderate) between social handicap/neglect and conduct disorder, and between mother's attitude and conduct disorder. This could be worth exploring in more detail. It may also be worth including the attitude of only one of the parents, e.g., only mother's attitude, as we expect some overlap there. Now to look at the second batch. 
 
 ```{r}
 convict.dat %>% 
@@ -137,7 +137,7 @@ convict.dat %>%
   #Dividing the variables up into 2 chunks to make it easier to read.
   pairs.panels()
 ```
-A quick glance at the chart shows that relatively stronger relationships exist between number of convictions and whether the child was difficult to discipline in school, the child's score on the progressive matrices and verbal comprehension (so, IQ), and familial criminal record variables (i.e., older sibling and/or parent). Of note is the moderate correlation between the two IQ variables, so perhaps we need only include one in the model. Aside from the above-mentioned possible instances of multicollinearity, the predictors appear to be relatively unrelated, so it is unlikely that we will see much "overlapping" explained variance in the model. The two social variables (number of friends and peer-rated popularity) do not appear to account for much variance, so these may be weak predictors. 
+A quick glance at the chart shows that relatively stronger relationships exist between number of convictions and whether the child was difficult to discipline in school, the child's score on the progressive matrices and verbal comprehension (in short, IQ), and familial criminal record variables (i.e., older sibling and/or parent). Of note is the moderate correlation between the two IQ variables (r = .45), so perhaps we need only include one in the model. Aside from the above-mentioned possible instances of multicollinearity, the predictors appear to be relatively unrelated, so it is unlikely that we will see much "overlapping" explained variance in the model. The two social variables (number of friends and peer-rated popularity) do not appear to account for much variance, suggesting that these variables will be weak predictors. 
 
 I want to further explore the relationship between conduct disorder and parental attitude. 
 
@@ -148,27 +148,29 @@ convict.dat$v54 <- as.factor(convict.dat$v54) #changing this variable to a facto
 ggplot(data = convict.dat, mapping = aes(x = v179, y = v28)) + geom_point(mapping = aes(color = v54)) + geom_smooth(mapping = aes(color = v54)) #Using maternal attitude as the x variable, but the graph looks the same for paternal attitude. 
 
 ```
-This graph suggests that at the "highest" (worst) level of conduct disorder (level 5), as maternal attitude go from "good" to "poor average" (where "good" = loving normal parenting style and normal disciplinary styles,and "poor average" = some combination of lax/strict/passive/spoilt/disinterested/erratic parenting and discipline styles) number of juvenile convictions actually decreases, until parenting becomes "poor" (harsh, erratic, cruel, neglecting), at which point number of convictions markedly increases. To make things even more peculiar, when looking at the second worst level of conduct disorder, the highest number of convictions are present when parenting levels are "good-average", and are lowest when parental attitude is "poor average". This pattern is unexpected, but should be interpreted with caution; there is a large margin of error around the interaction lines. Nonetheless, it may be worth considering an interaction effect here. 
+This graph suggests that when conduct disorder is most severe, as maternal attitude go from "good" to "poor" (where "good" = loving normal parenting style and normal disciplinary styles, and "poor" = some combination of harsh, erratic, cruel, neglecting, or disinterested parenting and discipline styles) number of juvenile convictions markedly increases. This in contrast children with less severe/no conduct disorder, where the "jump" in number of convictions is more subtle, when maternal attitude is poor. 
+
+Interestingly, when looking at the second worst level of conduct disorder, the pattern of number of convictions resembles a trigonometric graph! I am not going to try interpret this, but I will note the large margin of error around the interaction lines. Overall, then, it does not seem like there is an interaction effect here. 
 
 Now, I want to look at a possible interaction between social handicap and conduct disorder. 
 
 ```{r}
 
-convict.dat$v54 <- as.numeric(convict.dat$v54) #coding maternal attitude as a numeric variable for the graph. 
-convict.dat$v142 <- as.factor(convict.dat$v142) #coding maternal attitude as a numeric variable for the graph. 
+convict.dat$v54 <- as.numeric(convict.dat$v54) #coding conduct disorder as a numeric variable for the graph. 
+convict.dat$v142 <- as.factor(convict.dat$v142) #coding social handicap as a numeric variable for the graph. 
 
 ggplot(data = convict.dat, mapping = aes(x = v54, y = v28)) + geom_point(mapping = aes(color = v142)) + geom_smooth(mapping = aes(color = v142)) #Using maternal attitude as the x variable, but the graph looks the same for paternal attitude. 
 
 
 ```
-There does not appear to be any interesting interaction here. Boys with a greater social handicap are convicted of more crimes regardless of level of conduct disorder; boys with "worse" conduct disorder committ more crimes regardless. What is of note, however, is that the "jump" in the number of convictions when conduct disorder goes from "bad" to "severe" is much greater for boys with a big social handicap. 
+There does not appear to be any interesting interaction here. Boys with a greater social handicap are convicted of more crimes regardless of level of conduct disorder; boys with "worse" conduct disorder commit more crimes regardless. What is of note, however, is that the "jump" in the number of convictions when conduct disorder goes from "bad" to "severe" is much greater for boys with a big social handicap. 
 
 QUESTION 3: Build a model/s
 
-Three decisions need to be made prior to building the models. First, do we use the continuous or categorical outcome variable? It might be worth producing both to see how they differ - I think they provide different kinds of information; both are valuable. Second, how will we add predictors to the model? Given that we have "categorised" the predictors into themes, it may make sense to attempt a hierarchical method. 
+Three decisions need to be made prior to building the models. First, do we use the continuous or categorical outcome variable? It might be worth producing both to see how they differ - I think they provide different kinds of information; both are valuable. However, given time and space limitations, I will use the continuous variable, as I find it more interesting.Second, how will we add predictors to the model? Given that we have "categorised" the predictors into themes, it may make sense to attempt a hierarchical method. 
 
-Based on our findings in Q2 above, we can "rule out" a number of predictors:
-It did not seem like the birth/infant variables (67, fretful baby, and 113, abnormalities at birth) had much of a relationship with convictions, so let us exclude those for now. In addition the "personality" variable (outgoing vs withdrawn) did not appear to account for a lot of variance in number of convictions. We are only keeping one IQ variable (119, matrices) and are excluding verbal comprehension (158). We could also argue to not include the two social predictors, and to only include the teacher rating variables. 
+Based on our findings in Q2 above, we can pre-emptively "rule out" a number of predictors:
+It did not seem like the birth/infant variables (67, fretful baby, and 113, abnormalities at birth) had much of a relationship with convictions, so I think we can exclude those. In addition the "personality" variable (outgoing vs withdrawn) did not appear to account for a lot of variance in number of convictions. We are only keeping one IQ variable (119, matrices) and are excluding verbal comprehension (158). In the same vein, we can exclude the two social predictors, and only include the teacher rating variables. 
 
 Another important decision to make is how we are going to cross-validate the model. It is worth beginning with a test-train method, especially as we have such a big sample. We may want to look at other methods later in the analysis. 
 
@@ -178,7 +180,7 @@ traindata <- dplyr::sample_frac(convict.dat, 0.70)
 testdata <- dplyr::setdiff(convict.dat, traindata)
 ```
 
-Before buidling the models, we first need to check that all variables are in the correct format (i.e., type). There are lots of variables that are scored as ordered factors (likert-type scale responses), but for present purposes, it makes sense to code them as numeric variables. There are some limitations to this; R will assume that the difference between a 2 and a 3, for example, is 1, and that this difference is the same as that between the 3 and 4. Most of the variables are currently categorised as "labelled" - I'm not sure exactly what that means or what the implications of that is, so I think it best to change them all manually. 
+Before buidling the models, we first need to check that all variables are in the correct format (i.e., type). There are lots of variables that are scored as ordered factors (likert-type scale responses), but for present purposes, it makes sense to code them as numeric variables. There are some limitations to this; R will assume that the difference between a 2 and a 3, for example, is 1, and that this difference is the same as that between the 3 and 4. Most of the variables are currently categorised as "labelled" - I am not sure exactly what that means or what the implications are. I think it best to change them all manually. 
 
 ```{r}
 traindata$v54 <- as.numeric(traindata$v54) #changing the conduct disorder variable back to numeric variable
@@ -189,52 +191,78 @@ traindata$v134 <- as.factor(traindata$v134) #broken home variable
 str(traindata$v123)
 traindata$v123 <- as.factor(traindata$v123) #physical neglect
 traindata$v91 <- as.numeric(traindata$v91) #interest in child's education
+traindata$v142 <- as.numeric(traindata$v142) #social handicap
 
 ```
 
 Now to build a model with the continuous variable.
 
 ```{r}
-cont_model1 <- lm(v28 ~ v54, data = traindata)
+cont_model1 <- lm(v28 ~ v54, data = traindata) #starting with only conduct disorder as a predictor
 summary(cont_model1)
 ```
-Presence of conduct disorder accounts for just under 15% of variance in number of convictions. Let's add home/family related variables. 
+Presence of conduct disorder accounts for 13% of variance in number of convictions. As expected, the combined conduct disorder variable significantly predicts number of convictions. Let's add home/family related variables. 
 
 ```{r}
 cont_model2 <- lm(v28 ~ v54 + v123 + v142 + v134 + v179 + v91, data = traindata)
 summary(cont_model2)
 ```
-The addition of the five home-related variables add 5% of explained variance. Only two of the added variables are significant: social handicap, and having a broken home. We can remove the others for now, and then add the rest.  
+The addition of the five home-related variables add 6% of explained variance. Parents' interest in child's education seems to be a contributor here, as does social handicap, having just missed the p = 0.5 convention "cutoff". Looking at the adjusted R squared value, we can already see that we are being penalised for having lots of predictors with not a lot of predictive power (adjusted R squared < R squared by quite a bit). Although this is not strictly in line with model building "rules", we remove the non-significant before looking at the rest.  
 
 ```{r}
 cont_model3 <- lm(v28 ~ v54 + v142 + v134 + v155 + v297 + v119 +v300 + v301, data = traindata)
 summary(cont_model3)
 ```
-Now that we have added the school variables, some of the previously significant variables are no longer significant. Now, only conduct disorder and teacher's rating of difficulty in disciplining are significant. So, our final model is:
+Now that we have added the school variables, the social handicap variable is no longer contributing much to the model by way of explaining variance in the outcome variable. Now, only conduct disorder and teacher's rating of difficulty in disciplining are significant predictors, with delinquent older sibling borderline. So, our final model is:
 
 ```{r}
-cont_final_model <- lm(v28 ~ v54 + v297, data = traindata)
+cont_final_model <- lm(v28 ~ v54 + v297 +v301, data = traindata)
 summary(cont_final_model)
 ```
-This model does not explain a fortune of variance (only 17%, slightly more than conduct disorder by itself), but the model can significantly predict the number of crimes committed by a boy in the sample. It is worth noting that the combined conduct disorder here includes a teacher's rating of bad behaviour, in addition to the researcher's rating. Hence, both predictors in our final model involve some kind of teacher rating, suggesting that a boy's teacher may be a valuable source of information when determining high-risk children for an intervention, for example. 
+This model does not explain a fortune of variance (only 16%, slightly more than conduct disorder by itself), but the model can significantly predict the number of crimes committed by a boy in the sample. We can look at the coefficient estimates and calculate the confidence intervals around these parameters using the given standard errors. 
+
+It is worth noting that the combined conduct disorder here includes a teacher's rating of bad behaviour, in addition to the researcher's rating. Hence, two predictors in our final model involve some kind of teacher rating, suggesting that a boy's teacher may be a valuable source of information when determining high-risk children for an intervention, for example. 
 
 Let's plot the model:
 
 ```{r}
-ggplot(cont_final_model, aes(x = v54 + v297, y = v28)) + geom_point() + geom_smooth(method = "lm")
+ggplot(cont_final_model, aes(x = v54 + v297 + v301, y = v28)) + geom_point() + geom_smooth(method = "lm")
 ```
 
-It is difficult to 
+It is difficult to say much about the graph - the rather discrete nature, and coding similarity, of our predictors and outcome variable does not make for a very interesting plot (i.e., difficult to visualise patterns). As expected, though, there are a number of outliers. Let us take a closer look at some model diagnostics. 
 
 
-LOGISTIC MODEL
+
 
 ```{r}
-
-log_model1 <- glm(convicted_as_juvenile ~ v54 + v297, family = "binomial", data = traindata)
-summary(log_model1)
+durbinWatsonTest(cont_final_model, max.lag = 1, simulate = TRUE, reps = 1000, method = c("resample","normal")) #checking for independence of residuals
 
 ```
+Durbin-Watson test is non-significant - residual terms are uncorrelated.
+
+```{r}
+ncvTest(cont_final_model) 
+```
+The test for non-constant error variance is significant, meaning that there is a lot of bias in the residuals at different 
+
+
+
+
+Look at residuals and check other assumptions (constant variance, outliers, influence)
+
+Look at MSE
+
+Run model on test data and check MSE
+
+Cross validate by other means
+
+bootstrap
+
+write function 
+
+
+
+
 
 
 
