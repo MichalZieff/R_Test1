@@ -15,7 +15,7 @@ An initial look at the codebook and papers suggests that we will be dealing with
 
 ```{r}
 library(pacman)
-p_load(tidyverse, haven, magrittr, psych, janitor, labelled, car)
+p_load(tidyverse, haven, magrittr, psych, janitor, labelled, car, knitr)
 ```
 
 We use a function from package "haven" to load the two spss files into R. 
@@ -49,7 +49,7 @@ joined.dat <- left_join(del_id.dat, con_wide.dat, by = "icpsr_seq_id_number")
 
 The del.dat dataset still presents some problems. First, it contains 870 variables. We need to decide on a strategy to weed through this dataset, with the aim of creating a clean and manageable data frame with which to build our model. 
 
-As an outcome variable, I think it makes sense to predict juvenile conviction, rather than adult conviction, as this is central to our research question and aim. In the dataset, juvenile delinquency is coded as both a categorical and continuous variable. I will include both the continuous variable "# of juvenile convictions" and the categorical variable "convicted as a minor - yes or no?". There has to be a way to limit ourselves as to the variables we are going to look at, or we'll be here forever. Because I would like to determine the childhood factors that predict juvenile conviction, I will not include variables that were recorded past the age of 12.
+As an outcome variable, I think it makes sense to predict juvenile conviction, rather than adult conviction, as this is central to our research question and aim. In the dataset, juvenile delinquency is coded as both a categorical and continuous variable. I will include both the continuous variable "# of juvenile convictions" and the categorical variable "convicted as a minor - yes or no?" for now. There has to be a way to limit ourselves as to the variables we are going to look at, or we'll be here forever. Because I would like to determine the childhood factors that predict juvenile conviction, I will not include variables that were recorded past the age of 12.
 
 Within those 310 variables, I will begin with those that make the most sense to include (based on studies that have come from the data, and other research that looked at outcomes of these predictors). I present them below categorised by theme, with an indication of how the scores/responses are coded: 
 
@@ -141,7 +141,7 @@ A quick glance at the chart shows that relatively stronger relationships exist b
 
 I want to further explore the relationship between conduct disorder and parental attitude. 
 
-```{r}
+```{r warning = FALSE, message = FALSE}
 convict.dat$v179 <- as.numeric(convict.dat$v179) #coding maternal attitude as a numeric variable for the graph. 
 convict.dat$v54 <- as.factor(convict.dat$v54) #changing this variable to a factor so that R will be able to use it as a grouping variable in the graph
 
@@ -154,7 +154,7 @@ Interestingly, when looking at the second worst level of conduct disorder, the p
 
 Now, I want to look at a possible interaction between social handicap and conduct disorder. 
 
-```{r}
+```{r warning = FALSE, message = FALSE}
 
 convict.dat$v54 <- as.numeric(convict.dat$v54) #coding conduct disorder as a numeric variable for the graph. 
 convict.dat$v142 <- as.factor(convict.dat$v142) #coding social handicap as a numeric variable for the graph. 
@@ -174,7 +174,7 @@ It did not seem like the birth/infant variables (67, fretful baby, and 113, abno
 
 Another important decision to make is how we are going to cross-validate the model. It is worth beginning with a test-train method, especially as we have such a big sample. We may want to look at other methods later in the analysis. 
 
-```{r}
+```{r warning = FALSE, message = FALSE}
 set.seed(1)
 traindata <- dplyr::sample_frac(convict.dat, 0.70)
 testdata <- dplyr::setdiff(convict.dat, traindata)
@@ -219,46 +219,217 @@ Now that we have added the school variables, the social handicap variable is no 
 cont_final_model <- lm(v28 ~ v54 + v297 +v301, data = traindata)
 summary(cont_final_model)
 ```
-This model does not explain a fortune of variance (only 16%, slightly more than conduct disorder by itself), but the model can significantly predict the number of crimes committed by a boy in the sample. We can look at the coefficient estimates and calculate the confidence intervals around these parameters using the given standard errors. 
+This model does not explain a fortune of variance (only 16%, slightly more than conduct disorder by itself), but the model can significantly predict the number of crimes committed by a boy in the sample. The standard error of estimate is also smaller than the SD of the outcome variable (.62 vs .74), so our model is doing a slightly better job than if we had to be making predictions from a null model (using M and SD of the outcome variable).
+
+We can look at the coefficient estimates and calculate the confidence intervals around these parameters using the given standard errors. For example, the unstandardised coefficient for conduct disorder is .16 [.09, .24]; as conduct disorder goes from "good" (no conduct disorder) to "worse" (severe conduct disorder), a boy's score on the conviction variable is expected to increase by .16 points. On this note, a limitation of the outcome variable is that it does not capture exact (raw) number of convictions; in that, for example, a score of 3 could indicate that a boy committed two OR three crimes. Hence, we can only accurately speak about how the predictors influence a boy's score on the conviction variable, and not on the number of convictions per se. Also important to note: these coefficients are unstandardised, so we cannot compare their magnitudes. 
 
 It is worth noting that the combined conduct disorder here includes a teacher's rating of bad behaviour, in addition to the researcher's rating. Hence, two predictors in our final model involve some kind of teacher rating, suggesting that a boy's teacher may be a valuable source of information when determining high-risk children for an intervention, for example. 
 
 Let's plot the model:
 
-```{r}
+```{r message = FALSE}
 ggplot(cont_final_model, aes(x = v54 + v297 + v301, y = v28)) + geom_point() + geom_smooth(method = "lm")
 ```
 
-It is difficult to say much about the graph - the rather discrete nature, and coding similarity, of our predictors and outcome variable does not make for a very interesting plot (i.e., difficult to visualise patterns). As expected, though, there are a number of outliers. Let us take a closer look at some model diagnostics. 
+It is difficult to say much about the graph - the rather discrete nature, and coding similarity, of our predictors and outcome variable does not make for a very interesting plot (i.e., difficult to visualise patterns). As expected, though, there are a number of outliers. Let us take a closer look at some model diagnostics.
 
+First, a quick inspection of partial plots:
 
+```{r}
+avPlots(cont_final_model)
+```
+The avPlots shown above look at the partial relationships between the predictors and the outcome variable. None of the variables show a strong linear relationship, which we already suspected.
 
+Now onto the residuals:
+
+```{r}
+qqPlot(cont_final_model)
+```
+This does not look good - residuals are falling way out of the 95% confidence intervals, and do not look even remotely normally distributed. Are the residual terms correlated?
 
 ```{r}
 durbinWatsonTest(cont_final_model, max.lag = 1, simulate = TRUE, reps = 1000, method = c("resample","normal")) #checking for independence of residuals
 
 ```
-Durbin-Watson test is non-significant - residual terms are uncorrelated.
+No, the DW test is not signficiant, so let us explore further for problems. 
+
+```{r}
+plot(cont_final_model)
+```
+The residuals vs fitted values plot shows a number of stark outlier residuals (the scale-location plot tells us something similar). The leverage residual graph shows a few possible "problematic" cases that may be exerting influence on the model. Let's explore residuals and influential cases further. 
 
 ```{r}
 ncvTest(cont_final_model) 
 ```
-The test for non-constant error variance is significant, meaning that there is a lot of bias in the residuals at different 
+The test for non-constant error variance is significant, meaning that the residuals, or more accurately, the spread of residuals, are not constant at each level of any predictor in the model. This indicates that our model is biased. This is not entirely surprising, because we know that at the very least, our outcome variable is very skewed. 
+
+```{r}
+
+st.red <- rstandard(cont_final_model) #finding standardised residuals for the model
+
+sort(st.red) > abs(2) #checking for residuals above 2. We find 16
+sort(st.red) > abs(3) #find 7 st. residuals over 3
+
+print(sort(st.red)) #checking exact cases
+
+outlierTest(cont_final_model)
+
+```
+There are sixteen residuals greater than 2, which amounts to 5.55% of the residuals (just above what we would expect by chance). Three residuals are greater than 3 amounts to 1.04%. Upon closer inspection of the residuals, there is also one above 4, which is a clear residual outlier. If we go back to the raw data to look at these cases (to take a subset, 158, 411, 121, 143, 65, 252, 53, 402). The cases with residuals > 3 are all cases with high conviction score and bad to severe conduct disorder, which is "abnormal" or rare in the sample. The 402 case with the residual above 4, is an interesting case, with the highest possible scoring on convictions, but with mild conduct disorder and does not have a delinquent older sibling. An outlier test from package car confirms that cases 53 and 402 are outliers. Let us check whether this unusual point is exerting undue influence on the model. 
+
+```{r}
+cooks <- sort(cooks.distance(cont_final_model))
+print(cooks > 1)
+
+hatvalues <- hatvalues(cont_final_model)
+sort(hatvalues) 
+
+leveragePlots(cont_final_model)
+influencePlot(cont_final_model)
+```
+There are no points with a Cook's distance above 1, and while there are some hat values above the threshold of 3(k + 1)/n = .04,  but hese points do not necessarily exert influence on the regression coefficients because they are measured on outcome variable rather than the predictors, which we already know is skewed by outliers in the sample. We've had this information before, but the leverage and influence plots provide a nice, clear visual chart showing cases that appear to leveraging the linear model. 
+
+So far, things are not looking good. As a last attempt at redemption, we want to see if our model is generalisable to another sample. We look at the test data set. 
+
+```{r}
+
+test_model <- lm(v28 ~ v54 + v297 + v301, data = testdata)
+summary(test_model)
+
+```
+Quite different to the train model. Teacher's disciplinary rating is not significant, and the R squared is much smaller than for the train model. SEE is also larger. 
+
+Let's compare their mean squared errors:
+
+```{r}
+mean_squared_error <- function(x, y) {
+  return(list("training" = mean(resid(x)^2), "test" = mean(resid(y)^2)))
+}
+
+mean_squared_error(cont_final_model, test_model)
+
+```
+As expected, the mean squared error for the test model is somewhat higher than for the train model. So, not only is our model not good, but it is also quite biased. 
+
+We reach a bit of a dead end here, I think. The aim of this analysis is to determine criminality in children. We managed to diagnose a few influential cases and residual outliers, but these cases that may be contributing to a "problematic" model are the cases where juvenile convictions were recorded. We cannot exclude them, but then our model is both biased and bad (although, Box does concede that all models are, in fact, wrong). The question is, is our model useful? I can guess that the answer to that question is "no", but we want to try determine how accurate the model is at predicting juvenile convictions anyway.
+
+We want to know the positive and negative predictive values of the model (i.e., the sensitivity and specificity). Can the model successfully predict which boys will commit crimes as minors? Conversely, can it predict which boys will not be convicted as minors?
+
+The formula for the true positive is as follows: a/a + c where a is the number of boys who were correctly predicted to commit a crime, and c is the number of boys who committed a crime but were not correctly identified by the model. So, a + c is the total number of boys who committed a crime.  
+
+To calculate true negative, we need to find d/d + b, where d is the number of boys who were correctly identified as having committed a crime, and b is the number of boys who did not commit any crime, but whom the model falsely identified as being a criminal (false positive). 
+
+How are we going to calculate this in R? 
+
+We need to create a variable consisting of the predicted values for the model and then add it to our dataset. Our function will need to find how many times an observed score of 1 (no convictions) matches a predicted value of 1 (true negative). We expect this, at least, to be quite good, because the majority of the sample were not convicted. We also need the function to determine the number of times an observed value of > 1 matches a predicted value of > 1 (true positive). We also need to know the balances, i.e., the number of participants whose conviction score was incorrectly predicted either way, to calculate the sensitivity and specificity. 
+
+```{r}
+
+predict_val <- round(predict(cont_final_model)) #rounded off predicted values from our model because we'll need to compare actual and predicted scores.
+length(predict_val)
+
+obs <- traindata$v28 #actual values
+length(obs)
+
+```
+
+Problem - two variables have different lengths. This is because the model will not include data points in the model if there are NAs. So, we need to find the problematic variable(s) and delete those cases, and then join the column of predicted values to a dataset. We find that the variable with missing data is the teacher discipline one, with 32 NAs.
+
+```{r}
+
+sum(is.na(traindata$v297)) #teacher discipline variable has 32 cases missing, so we need to remove these. 
+
+new_train <- traindata %>% 
+  select(v28, convicted_as_juvenile, v54, v297, v301) %>% 
+  na.omit() #get rid of NAs
+
+length(new_train$v28)== length(predict_val) #True.
+
+predict_train <- cbind(new_train, predict_val) #join to the dataset.
+
+```
+
+Now to determine whether the actual and predicted values were identical. 
+
+```{r}
+
+d <- predict_train %>% 
+  dplyr::filter(v28 == 1 & predict_val == 1) %>% #True negative: When obs is 1 and pred is 1
+  nrow() #175 is true negative
+
+a <- predict_train %>% 
+  dplyr::filter(v28 > 1 & predict_val > 1) %>%  #True positive: When obs is not/> 1 and so is pred
+  nrow() #20 is true positive
+
+b <- predict_train %>% 
+  dplyr::filter(v28 == 1 & predict_val != 1) %>%  #False positive: When obs is 1 but pred is not/>
+  nrow() #29 is false positive
+
+c <- predict_train %>% 
+  dplyr::filter(v28 > 1 & predict_val == 1) %>% #False negative: When obs is not/> 1 but pred is 1
+  nrow() #32 is true negative
+
+#All adds up to 256, which is great. 
+
+#Now we can calculate our true positives and true negatives!
+
+sens <- a/(a+c)
+print(sens)
+
+spec <- d/(d+c)
+print(spec)
+
+```
+
+As predicted, sensiivity is high (84%) and specificity is low (38%). Let's turn this into a function. 
+
+```{r}
+
+accuracy <- function(df, act_column, pred_column) {
+d <- df %>% 
+  dplyr::filter(act_column == 1 & pred_column == 1) %>% 
+  nrow() #true negative
+a <- df %>% 
+  dplyr::filter(act_column > 1 & pred_column > 1) %>% 
+  nrow() #true positive
+b <- df %>% 
+  dplyr::filter(act_column == 1 & pred_column != 1) %>% 
+  nrow() #false positive
+c <- df %>% 
+  dplyr::filter(act_column > 1 & pred_column == 1) %>% 
+  nrow() #true negative
+se <- round((a/(a+c)), digits = 2)
+print(paste("Sensitivity is", se))
+sp <- round((d/(d+c)), digits = 2)
+print(paste("Specificity is", sp)) }
+
+accuracy(predict_train, predict_train$v28, predict_train$predict_val) #It works. 
+
+```
+
+Some limitations of this function:
+
+1. It is limited to the filter conditions used for this analysis. Hence, it would only be useful to someone working on this dataset, using this outcome variable, and answering this type of research question. 
+
+2. There are no error checking messages (due to time constraints). For example, it would not work if there was missing data, etc. It would be great if the function could prompt the user to any problems in the data. 
+
+Limitations of this analysis in general:
+
+1. It would have been useful to look at bootstrapped regression parameters, such as 95% confidence intervals around the regression coefficients. Sadly, I ran out time for that. 
+
+2. I also did not perform any transformations on the skewed variables; some further exploration and trial-and-error there may have shed light on why the model was not "behaving" well. 
+
+3. A more thorough, systematic exploration of the predictor variables might have allowed us to create a model with stronger predictive power (again, time contraints!). 
+
+4. GITHUB REPO LINK
+
+https://github.com/MichalZieff/R_Test1.git
 
 
 
 
-Look at residuals and check other assumptions (constant variance, outliers, influence)
 
-Look at MSE
 
-Run model on test data and check MSE
-
-Cross validate by other means
-
-bootstrap
-
-write function 
 
 
 
